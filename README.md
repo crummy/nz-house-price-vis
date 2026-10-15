@@ -36,12 +36,14 @@ The update script downloads the latest source files and writes
 `src/data/housing.json`. It uses December observations, so the matrix ends at
 the latest complete calendar year.
 
-## Cloudflare Pages
+## Cloudflare Workers
 
-Connect the repository to Cloudflare Pages and use these settings:
+Connect the repository to Cloudflare Workers Builds and use these settings:
 
 - Build command: `npm run build`
-- Build output directory: `dist`
+- Deploy command: `npx wrangler deploy`
+- Root directory: `/`
 - Node.js version: `24`
 
-The site is fully static. It needs no Functions or runtime bindings.
+The site is fully static. Wrangler uploads `dist/` as Workers static assets.
+It needs no Worker script or runtime bindings.

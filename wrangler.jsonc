@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "nz-house-price-matrix",
-  "pages_build_output_dir": "./dist",
-  "compatibility_date": "2026-10-15"
+  "name": "nz-house-price-vis",
+  "compatibility_date": "2026-10-15",
+  "assets": {
+    "directory": "./dist"
+  }
 }
