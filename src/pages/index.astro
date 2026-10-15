@@ -1,0 +1,662 @@
+---
+import housingData from "../data/housing.json";
+import "../styles/global.css";
+
+const groupLabels: Record<string, string> = {
+  National: "National",
+  Region: "Regions",
+  "Territorial Authority": "Territorial authorities",
+  "Auckland Local Board": "Auckland local boards",
+};
+
+const groups = Object.entries(groupLabels).map(([key, label]) => ({
+  key,
+  label,
+  locations: housingData.locations
+    .map((location, index) => ({ ...location, index }))
+    .filter((location) => location.group === key),
+}));
+
+const generatedDate = new Intl.DateTimeFormat("en-NZ", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "Pacific/Auckland",
+}).format(new Date(housingData.metadata.generatedAt));
+---
+
+<!doctype html>
+<html lang="en-NZ">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta
+      name="description"
+      content="Explore inflation-adjusted New Zealand house-price growth for every purchase and sale year since 1980."
+    />
+    <meta name="theme-color" content="#f2efe7" />
+    <title>When you bought. When you sold. — New Zealand house prices</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">NZ</span>
+        <strong>Long View / Aotearoa</strong>
+      </div>
+      <span class="header-note">Residential property prices · 1980–{housingData.metadata.latestCompleteYear}</span>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">The New Zealand house-price matrix</p>
+          <h1 id="page-title">When you bought.<br />When you sold.</h1>
+        </div>
+        <div class="hero-copy">
+          <p class="lede">
+            Timing changed the outcome. See how prices moved for every possible
+            purchase and sale year.
+          </p>
+          <p class="hero-note">
+            The default view shows annual house-price growth after inflation.
+            It measures market prices, not the full financial return from owning a home.
+          </p>
+        </div>
+      </section>
+
+      <section class="matrix-section" aria-labelledby="matrix-title">
+        <div class="control-row">
+          <div class="control">
+            <label for="location-select">Place</label>
+            <select id="location-select">
+              {groups.map((group) => (
+                group.locations.length > 0 && (
+                  <optgroup label={group.label}>
+                    {group.locations.map((location) => (
+                      <option value={location.index}>{location.name}</option>
+                    ))}
+                  </optgroup>
+                )
+              ))}
+            </select>
+          </div>
+
+          <div class="control">
+            <span class="control-label">Measure</span>
+            <div class="segmented" id="measure-control" aria-label="Price measure">
+              <button type="button" data-measure="real" aria-pressed="true">After inflation</button>
+              <button type="button" data-measure="nominal" aria-pressed="false">Headline prices</button>
+            </div>
+          </div>
+
+          <div class="control">
+            <span class="control-label">Highlight ownership period</span>
+            <div class="segmented" id="horizon-control" aria-label="Ownership period">
+              <button type="button" data-horizon="5" aria-pressed="false">5 years</button>
+              <button type="button" data-horizon="10" aria-pressed="false">10 years</button>
+              <button type="button" data-horizon="20" aria-pressed="true">20 years</button>
+            </div>
+          </div>
+
+          <div class="toggle-control">
+            <span>History</span>
+            <label class="switch-label" for="extended-toggle">
+              <input id="extended-toggle" type="checkbox" />
+              Include 1962–79
+            </label>
+          </div>
+        </div>
+
+        <div class="viz-grid">
+          <div class="chart-panel">
+            <div class="chart-heading">
+              <h2 id="matrix-title">New Zealand</h2>
+              <p id="range-note">Every purchase and sale year, 1980–{housingData.metadata.latestCompleteYear}</p>
+            </div>
+            <div class="chart-scroll" id="chart-scroll">
+              <svg
+                id="matrix"
+                role="img"
+                aria-labelledby="matrix-title matrix-description"
+              ></svg>
+              <div class="tooltip" id="tooltip" hidden></div>
+            </div>
+            <p id="matrix-description" class="visually-hidden">
+              A triangular matrix. Rows are purchase years, columns are sale years,
+              and colour shows annual house-price growth.
+            </p>
+            <div class="legend" id="legend" aria-label="Colour scale"></div>
+
+            <div class="stat-strip" aria-live="polite">
+              <div class="stat">
+                <span class="stat-label" id="median-label">Median 20-year growth</span>
+                <strong id="median-value">—</strong>
+                <small id="median-period">Across all available periods</small>
+              </div>
+              <div class="stat">
+                <span class="stat-label" id="best-label">Best 20 years</span>
+                <strong id="best-value">—</strong>
+                <small id="best-period">—</small>
+              </div>
+              <div class="stat">
+                <span class="stat-label" id="worst-label">Worst 20 years</span>
+                <strong id="worst-value">—</strong>
+                <small id="worst-period">—</small>
+              </div>
+            </div>
+          </div>
+
+          <aside class="detail-panel" aria-labelledby="detail-heading">
+            <p class="detail-kicker" id="detail-heading">Selected period</p>
+            <p class="period-years">
+              <strong id="detail-start">2000</strong>
+              <span aria-hidden="true">→</span>
+              <strong id="detail-end">2020</strong>
+            </p>
+            <p class="return-number" id="detail-return">—</p>
+            <p class="return-label" id="detail-label">real annual house-price growth</p>
+            <div class="detail-rule"></div>
+            <dl class="detail-metrics">
+              <div>
+                <dt>After inflation</dt>
+                <dd id="detail-real">—</dd>
+              </div>
+              <div>
+                <dt>Headline prices</dt>
+                <dd id="detail-nominal">—</dd>
+              </div>
+              <div>
+                <dt id="detail-total-label">Real total change</dt>
+                <dd id="detail-total">—</dd>
+              </div>
+              <div>
+                <dt>Price multiple</dt>
+                <dd id="detail-multiple">—</dd>
+              </div>
+            </dl>
+            <p class="locked-note">Click or tap a square to hold a period.</p>
+
+            <div class="period-picker">
+              <h3>Choose exact years</h3>
+              <p>This control provides the same values without using the matrix.</p>
+              <label>
+                Bought
+                <select id="start-select"></select>
+              </label>
+              <label>
+                Sold
+                <select id="end-select"></select>
+              </label>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="method-section" aria-labelledby="method-title">
+        <div>
+          <p class="section-number">01 / Method and limits</p>
+          <h2 id="method-title">Price growth is not profit.</h2>
+        </div>
+        <div class="method-grid">
+          <article>
+            <h3>What each square shows</h3>
+            <p>
+              We compare the index in the sale year with the index in the purchase
+              year. We then convert that change to an annual rate.
+            </p>
+            <code class="formula">annual growth = (end index ÷ start index)<sup>1 ÷ years</sup> − 1</code>
+          </article>
+          <article>
+            <h3>After inflation</h3>
+            <p>
+              The main view removes consumer-price inflation. This makes values from
+              different decades more comparable. The headline-prices view does not
+              make that adjustment.
+            </p>
+          </article>
+          <article>
+            <h3>What is not included</h3>
+            <ul>
+              <li>Mortgage interest, leverage, rates, insurance, or maintenance</li>
+              <li>Renovations, transaction costs, tax, rent, or the value of living in the home</li>
+              <li>Differences between individual properties</li>
+            </ul>
+          </article>
+          <article>
+            <h3>Extended national history</h3>
+            <p>
+              The optional BIS series begins in 1962. Before the final quarter of 1979,
+              it covers main urban areas. From then on, it covers all dwellings nationally.
+              We keep the extension optional because this is a material coverage change.
+            </p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Data snapshot generated {generatedDate}. December observations are used, so
+        the matrix ends at the latest complete calendar year. Historical source data
+        can be revised.
+      </p>
+      <nav class="footer-links" aria-label="Data sources">
+        <a href="https://www.hud.govt.nz/stats-and-insights/property-and-sales-statistics/about-the-dashboard">MCERT property statistics</a>
+        <a href="https://data.bis.org/topics/RPP/BIS%2CWS_SPP%2C1.0/Q.NZ.R.628">BIS real price series</a>
+        <a href="https://data.bis.org/help/legal">BIS terms</a>
+      </nav>
+    </footer>
+
+    <script id="housing-data" type="application/json" set:html={JSON.stringify(housingData)}></script>
+    <script>
+      const dataElement = document.querySelector("#housing-data");
+      const DATA = JSON.parse(dataElement.textContent || "{}");
+      const svg = document.querySelector("#matrix");
+      const locationSelect = document.querySelector("#location-select");
+      const extendedToggle = document.querySelector("#extended-toggle");
+      const tooltip = document.querySelector("#tooltip");
+      const chartScroll = document.querySelector("#chart-scroll");
+      const startSelect = document.querySelector("#start-select");
+      const endSelect = document.querySelector("#end-select");
+      const SVG_NS = "http://www.w3.org/2000/svg";
+
+      const state = {
+        locationIndex: Number(locationSelect.value || 0),
+        measure: "real",
+        horizon: 20,
+        selectedStart: 2000,
+        selectedEnd: 2020,
+      };
+
+      const palettes = {
+        real: {
+          limits: [0, 2, 4, 6],
+          labels: ["Below 0%", "0–2%", "2–4%", "4–6%", "Above 6%"],
+          colours: ["#934943", "#d3a197", "#ddd7c5", "#a8ba95", "#5f7b52"],
+        },
+        nominal: {
+          limits: [0, 3, 6, 9],
+          labels: ["Below 0%", "0–3%", "3–6%", "6–9%", "Above 9%"],
+          colours: ["#934943", "#d3a197", "#ddd7c5", "#a8ba95", "#5f7b52"],
+        },
+      };
+
+      function activeLocation() {
+        const location = DATA.locations[state.locationIndex];
+        if (location.name === "New Zealand" && extendedToggle.checked) {
+          return DATA.nationalExtended;
+        }
+        return location;
+      }
+
+      function pointMap(location = activeLocation()) {
+        return new Map(
+          location.points.map(([year, nominalIndex, realIndex]) => [
+            year,
+            { year, nominalIndex, realIndex },
+          ]),
+        );
+      }
+
+      function valueFor(point, measure = state.measure) {
+        return measure === "real" ? point.realIndex : point.nominalIndex;
+      }
+
+      function periodReturn(start, end, measure = state.measure) {
+        if (!start || !end || end.year <= start.year) return null;
+        const years = end.year - start.year;
+        const startValue = valueFor(start, measure);
+        const endValue = valueFor(end, measure);
+        return {
+          annual: (Math.pow(endValue / startValue, 1 / years) - 1) * 100,
+          total: (endValue / startValue - 1) * 100,
+          multiple: endValue / startValue,
+          years,
+        };
+      }
+
+      function colourFor(value) {
+        const palette = palettes[state.measure];
+        if (value < palette.limits[0]) return palette.colours[0];
+        if (value < palette.limits[1]) return palette.colours[1];
+        if (value < palette.limits[2]) return palette.colours[2];
+        if (value < palette.limits[3]) return palette.colours[3];
+        return palette.colours[4];
+      }
+
+      function formatPercent(value, digits = 1) {
+        return new Intl.NumberFormat("en-NZ", {
+          style: "percent",
+          signDisplay: "exceptZero",
+          minimumFractionDigits: digits,
+          maximumFractionDigits: digits,
+        }).format(value / 100);
+      }
+
+      function svgElement(name, attributes = {}) {
+        const element = document.createElementNS(SVG_NS, name);
+        for (const [key, value] of Object.entries(attributes)) {
+          element.setAttribute(key, String(value));
+        }
+        return element;
+      }
+
+      function renderLegend() {
+        const palette = palettes[state.measure];
+        const legend = document.querySelector("#legend");
+        legend.replaceChildren(
+          ...palette.labels.map((label, index) => {
+            const item = document.createElement("div");
+            item.className = "legend-item";
+            const swatch = document.createElement("span");
+            swatch.className = "legend-swatch";
+            swatch.style.background = palette.colours[index];
+            const text = document.createElement("span");
+            text.textContent = index === 0 ? `${label} · lost ground` : label;
+            item.append(swatch, text);
+            return item;
+          }),
+        );
+      }
+
+      function showTooltip(event, start, end, result) {
+        tooltip.innerHTML = `<strong>${formatPercent(result.annual)}</strong><span>${start.year} → ${end.year} · ${result.years} years</span>`;
+        tooltip.hidden = false;
+        const bounds = chartScroll.getBoundingClientRect();
+        const desiredLeft = event.clientX - bounds.left + chartScroll.scrollLeft + 14;
+        const desiredTop = event.clientY - bounds.top + chartScroll.scrollTop + 14;
+        tooltip.style.left = `${Math.min(desiredLeft, chartScroll.scrollWidth - 200)}px`;
+        tooltip.style.top = `${desiredTop}px`;
+      }
+
+      function hideTooltip() {
+        tooltip.hidden = true;
+      }
+
+      function ensureValidSelection(map) {
+        if (
+          map.has(state.selectedStart) &&
+          map.has(state.selectedEnd) &&
+          state.selectedEnd > state.selectedStart
+        ) return;
+        const years = [...map.keys()].sort((a, b) => a - b);
+        state.selectedEnd = years.at(-1);
+        state.selectedStart = map.has(state.selectedEnd - state.horizon)
+          ? state.selectedEnd - state.horizon
+          : years[0];
+      }
+
+      function renderMatrix() {
+        const location = activeLocation();
+        const map = pointMap(location);
+        ensureValidSelection(map);
+        const availableYears = [...map.keys()].sort((a, b) => a - b);
+        const minYear = availableYears[0];
+        const maxYear = availableYears.at(-1);
+        const years = Array.from({ length: maxYear - minYear + 1 }, (_, index) => minYear + index);
+        const count = years.length;
+        const cell = count > 55 ? 10.5 : 13;
+        const margin = { top: 54, right: 18, bottom: 18, left: 64 };
+        const width = margin.left + count * cell + margin.right;
+        const height = margin.top + count * cell + margin.bottom;
+        svg.replaceChildren();
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+        const background = svgElement("rect", {
+          x: margin.left,
+          y: margin.top,
+          width: count * cell,
+          height: count * cell,
+          fill: "#e3dfd2",
+        });
+        svg.append(background);
+
+        const labelEvery = count > 55 ? 10 : 5;
+        for (const year of years) {
+          const index = year - minYear;
+          if ((year % labelEvery === 0) || year === minYear || year === maxYear) {
+            const topLabel = svgElement("text", {
+              x: margin.left + index * cell + cell / 2,
+              y: margin.top - 10,
+              "text-anchor": "middle",
+              class: "axis-label",
+            });
+            topLabel.textContent = year;
+            svg.append(topLabel);
+
+            const leftLabel = svgElement("text", {
+              x: margin.left - 10,
+              y: margin.top + index * cell + cell * 0.72,
+              "text-anchor": "end",
+              class: "axis-label",
+            });
+            leftLabel.textContent = year;
+            svg.append(leftLabel);
+          }
+        }
+
+        const saleTitle = svgElement("text", {
+          x: margin.left,
+          y: 12,
+          class: "axis-title",
+        });
+        saleTitle.textContent = "SALE YEAR →";
+        svg.append(saleTitle);
+
+        const buyTitle = svgElement("text", {
+          x: 13,
+          y: margin.top,
+          class: "axis-title",
+          transform: `rotate(-90 13 ${margin.top})`,
+        });
+        buyTitle.textContent = "PURCHASE YEAR →";
+        svg.append(buyTitle);
+
+        const cells = svgElement("g", { class: "cells" });
+        const horizon = svgElement("g", { class: "horizon" });
+        for (const startYear of years) {
+          const start = map.get(startYear);
+          if (!start) continue;
+          for (let endYear = startYear + 1; endYear <= maxYear; endYear += 1) {
+            const end = map.get(endYear);
+            if (!end) continue;
+            const result = periodReturn(start, end);
+            if (!result) continue;
+            const x = margin.left + (endYear - minYear) * cell;
+            const y = margin.top + (startYear - minYear) * cell;
+            const rect = svgElement("rect", {
+              x,
+              y,
+              width: cell - 0.38,
+              height: cell - 0.38,
+              fill: colourFor(result.annual),
+              class: "cell",
+              "data-start": startYear,
+              "data-end": endYear,
+            });
+            rect.addEventListener("pointermove", (event) => showTooltip(event, start, end, result));
+            rect.addEventListener("pointerleave", hideTooltip);
+            rect.addEventListener("click", () => {
+              state.selectedStart = startYear;
+              state.selectedEnd = endYear;
+              renderAll();
+            });
+            cells.append(rect);
+
+            if (endYear - startYear === state.horizon) {
+              horizon.append(svgElement("rect", {
+                x: x + 0.35,
+                y: y + 0.35,
+                width: cell - 1.08,
+                height: cell - 1.08,
+                class: "horizon-cell",
+              }));
+            }
+          }
+        }
+        svg.append(cells, horizon);
+
+        if (map.has(state.selectedStart) && map.has(state.selectedEnd)) {
+          const x = margin.left + (state.selectedEnd - minYear) * cell;
+          const y = margin.top + (state.selectedStart - minYear) * cell;
+          svg.append(
+            svgElement("rect", {
+              x: x + 0.25,
+              y: y + 0.25,
+              width: cell - 0.88,
+              height: cell - 0.88,
+              class: "selected-cell-outer",
+            }),
+            svgElement("rect", {
+              x: x + 0.25,
+              y: y + 0.25,
+              width: cell - 0.88,
+              height: cell - 0.88,
+              class: "selected-cell",
+            }),
+          );
+        }
+
+        document.querySelector("#matrix-title").textContent = location.name;
+        document.querySelector("#range-note").textContent =
+          `Every purchase and sale year, ${minYear}–${maxYear}`;
+        document.querySelector("#matrix-description").textContent =
+          `A triangular matrix for ${location.name}. Rows are purchase years, columns are sale years, and colour shows ${state.measure === "real" ? "inflation-adjusted" : "nominal"} annual house-price growth.`;
+      }
+
+      function renderDetail() {
+        const map = pointMap();
+        const start = map.get(state.selectedStart);
+        const end = map.get(state.selectedEnd);
+        const active = periodReturn(start, end, state.measure);
+        const real = periodReturn(start, end, "real");
+        const nominal = periodReturn(start, end, "nominal");
+        if (!active || !real || !nominal) return;
+
+        document.querySelector("#detail-start").textContent = start.year;
+        document.querySelector("#detail-end").textContent = end.year;
+        document.querySelector("#detail-return").textContent = formatPercent(active.annual);
+        document.querySelector("#detail-label").textContent =
+          `${state.measure === "real" ? "real" : "nominal"} annual house-price growth over ${active.years} years`;
+        document.querySelector("#detail-real").textContent = `${formatPercent(real.annual)} / yr`;
+        document.querySelector("#detail-nominal").textContent = `${formatPercent(nominal.annual)} / yr`;
+        document.querySelector("#detail-total-label").textContent =
+          state.measure === "real" ? "Real total change" : "Nominal total change";
+        document.querySelector("#detail-total").textContent = formatPercent(active.total, 0);
+        document.querySelector("#detail-multiple").textContent = `${active.multiple.toFixed(2)}×`;
+      }
+
+      function renderStats() {
+        const map = pointMap();
+        const returns = [];
+        for (const [year, start] of map) {
+          const end = map.get(year + state.horizon);
+          const result = periodReturn(start, end);
+          if (result) returns.push({ start: year, end: year + state.horizon, value: result.annual });
+        }
+        returns.sort((a, b) => a.value - b.value);
+        const median = returns.length
+          ? returns.length % 2
+            ? returns[Math.floor(returns.length / 2)].value
+            : (returns[returns.length / 2 - 1].value + returns[returns.length / 2].value) / 2
+          : null;
+        const worst = returns[0];
+        const best = returns.at(-1);
+        document.querySelector("#median-label").textContent = `Median ${state.horizon}-year growth`;
+        document.querySelector("#best-label").textContent = `Best ${state.horizon} years`;
+        document.querySelector("#worst-label").textContent = `Worst ${state.horizon} years`;
+        document.querySelector("#median-value").textContent = median === null ? "—" : `${formatPercent(median)} / yr`;
+        document.querySelector("#median-period").textContent = `${returns.length} complete periods`;
+        document.querySelector("#best-value").textContent = best ? `${formatPercent(best.value)} / yr` : "—";
+        document.querySelector("#best-period").textContent = best ? `${best.start}–${best.end}` : "—";
+        document.querySelector("#worst-value").textContent = worst ? `${formatPercent(worst.value)} / yr` : "—";
+        document.querySelector("#worst-period").textContent = worst ? `${worst.start}–${worst.end}` : "—";
+      }
+
+      function renderYearPickers() {
+        const map = pointMap();
+        const years = [...map.keys()].sort((a, b) => a - b);
+        startSelect.replaceChildren(
+          ...years.slice(0, -1).map((year) => new Option(year, year, false, year === state.selectedStart)),
+        );
+        endSelect.replaceChildren(
+          ...years.slice(1).map((year) => new Option(year, year, false, year === state.selectedEnd)),
+        );
+      }
+
+      function renderControls() {
+        document.querySelectorAll("[data-measure]").forEach((button) => {
+          button.setAttribute("aria-pressed", String(button.dataset.measure === state.measure));
+        });
+        document.querySelectorAll("[data-horizon]").forEach((button) => {
+          button.setAttribute("aria-pressed", String(Number(button.dataset.horizon) === state.horizon));
+        });
+        const isNational = DATA.locations[state.locationIndex].name === "New Zealand";
+        extendedToggle.disabled = !isNational;
+        if (!isNational) extendedToggle.checked = false;
+      }
+
+      function renderAll() {
+        hideTooltip();
+        renderControls();
+        renderLegend();
+        renderMatrix();
+        renderDetail();
+        renderStats();
+        renderYearPickers();
+      }
+
+      locationSelect.addEventListener("change", () => {
+        state.locationIndex = Number(locationSelect.value);
+        renderControls();
+        const map = pointMap();
+        const years = [...map.keys()].sort((a, b) => a - b);
+        state.selectedEnd = years.at(-1);
+        state.selectedStart = map.has(state.selectedEnd - state.horizon)
+          ? state.selectedEnd - state.horizon
+          : years[0];
+        renderAll();
+      });
+
+      extendedToggle.addEventListener("change", () => {
+        const map = pointMap();
+        ensureValidSelection(map);
+        renderAll();
+      });
+
+      document.querySelector("#measure-control").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-measure]");
+        if (!button) return;
+        state.measure = button.dataset.measure;
+        renderAll();
+      });
+
+      document.querySelector("#horizon-control").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-horizon]");
+        if (!button) return;
+        state.horizon = Number(button.dataset.horizon);
+        renderAll();
+      });
+
+      startSelect.addEventListener("change", () => {
+        state.selectedStart = Number(startSelect.value);
+        if (state.selectedEnd <= state.selectedStart) {
+          const later = [...pointMap().keys()].find((year) => year > state.selectedStart);
+          state.selectedEnd = later;
+        }
+        renderAll();
+      });
+
+      endSelect.addEventListener("change", () => {
+        state.selectedEnd = Number(endSelect.value);
+        if (state.selectedStart >= state.selectedEnd) {
+          const earlier = [...pointMap().keys()].filter((year) => year < state.selectedEnd).at(-1);
+          state.selectedStart = earlier;
+        }
+        renderAll();
+      });
+
+      renderAll();
+    </script>
+  </body>
+</html>
