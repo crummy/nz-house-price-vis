@@ -59,7 +59,8 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
           </p>
           <p class="hero-note">
             The default view shows annual house-price growth after inflation.
-            It measures market prices, not the full financial return from owning a home.
+            Switch to the 20% deposit view to see the equivalent gross return on
+            the buyer’s starting equity.
           </p>
         </div>
       </section>
@@ -86,6 +87,14 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
             <div class="segmented" id="measure-control" aria-label="Price measure">
               <button type="button" data-measure="real" aria-pressed="true">After inflation</button>
               <button type="button" data-measure="nominal" aria-pressed="false">Headline prices</button>
+            </div>
+          </div>
+
+          <div class="control">
+            <span class="control-label">Return basis</span>
+            <div class="segmented" id="basis-control" aria-label="Return basis">
+              <button type="button" data-basis="property" aria-pressed="true">House value</button>
+              <button type="button" data-basis="equity" aria-pressed="false">20% deposit</button>
             </div>
           </div>
 
@@ -170,10 +179,14 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
                 <dd id="detail-total">—</dd>
               </div>
               <div>
-                <dt>Price multiple</dt>
+                <dt id="detail-multiple-label">Price multiple</dt>
                 <dd id="detail-multiple">—</dd>
               </div>
             </dl>
+            <p class="assumption-note" id="assumption-note" hidden>
+              Assumes a 20% deposit and an unchanged mortgage balance. Interest,
+              repayments, and ownership costs are excluded.
+            </p>
             <p class="locked-note">Click or tap a square to hold a period.</p>
 
             <div class="period-picker">
@@ -215,9 +228,18 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
             </p>
           </article>
           <article>
+            <h3>Return on a 20% deposit</h3>
+            <p>
+              The leveraged view assumes a 20% deposit and an 80% mortgage whose
+              principal does not change. Ending equity equals the sale value less
+              that starting mortgage. The real view adjusts ending equity for inflation.
+            </p>
+            <code class="formula">equity return = (ending equity ÷ starting deposit) − 1</code>
+          </article>
+          <article>
             <h3>What is not included</h3>
             <ul>
-              <li>Mortgage interest, leverage, rates, insurance, or maintenance</li>
+              <li>Mortgage interest, repayments, rates, insurance, or maintenance</li>
               <li>Renovations, transaction costs, tax, rent, or the value of living in the home</li>
               <li>Differences between individual properties</li>
             </ul>
@@ -263,23 +285,40 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
       const state = {
         locationIndex: Number(locationSelect.value || 0),
         measure: "real",
+        basis: "property",
         horizon: 20,
         selectedStart: 2000,
         selectedEnd: 2020,
       };
 
       const palettes = {
-        real: {
-          limits: [0, 2, 4, 6],
-          labels: ["Below 0%", "0–2%", "2–4%", "4–6%", "Above 6%"],
-          colours: ["#934943", "#d3a197", "#ddd7c5", "#a8ba95", "#5f7b52"],
+        property: {
+          real: {
+            limits: [0, 2, 4, 6],
+            labels: ["Below 0% · lost ground", "0–2%", "2–4%", "4–6%", "Above 6%"],
+            colours: ["#934943", "#d3a197", "#ddd7c5", "#a8ba95", "#5f7b52"],
+          },
+          nominal: {
+            limits: [0, 3, 6, 9],
+            labels: ["Below 0% · lost ground", "0–3%", "3–6%", "6–9%", "Above 9%"],
+            colours: ["#934943", "#d3a197", "#ddd7c5", "#a8ba95", "#5f7b52"],
+          },
         },
-        nominal: {
-          limits: [0, 3, 6, 9],
-          labels: ["Below 0%", "0–3%", "3–6%", "6–9%", "Above 9%"],
-          colours: ["#934943", "#d3a197", "#ddd7c5", "#a8ba95", "#5f7b52"],
+        equity: {
+          real: {
+            limits: [0, 8, 16, 24],
+            labels: ["Below 0% · deposit shrank", "0–8%", "8–16%", "16–24%", "Above 24%"],
+            colours: ["#934943", "#d3a197", "#ddd7c5", "#a8ba95", "#5f7b52"],
+          },
+          nominal: {
+            limits: [0, 10, 20, 30],
+            labels: ["Below 0% · deposit shrank", "0–10%", "10–20%", "20–30%", "Above 30%"],
+            colours: ["#934943", "#d3a197", "#ddd7c5", "#a8ba95", "#5f7b52"],
+          },
         },
       };
+
+      const DEPOSIT_SHARE = 0.2;
 
       function activeLocation() {
         const location = DATA.locations[state.locationIndex];
@@ -298,25 +337,33 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
         );
       }
 
-      function valueFor(point, measure = state.measure) {
-        return measure === "real" ? point.realIndex : point.nominalIndex;
-      }
-
-      function periodReturn(start, end, measure = state.measure) {
+      function periodReturn(start, end, measure = state.measure, basis = state.basis) {
         if (!start || !end || end.year <= start.year) return null;
         const years = end.year - start.year;
-        const startValue = valueFor(start, measure);
-        const endValue = valueFor(end, measure);
+        const nominalMultiple = end.nominalIndex / start.nominalIndex;
+        const realMultiple = end.realIndex / start.realIndex;
+        let multiple = measure === "real" ? realMultiple : nominalMultiple;
+
+        if (basis === "equity") {
+          const mortgageShare = 1 - DEPOSIT_SHARE;
+          const nominalEquityMultiple = (nominalMultiple - mortgageShare) / DEPOSIT_SHARE;
+          const inflationMultiple = nominalMultiple / realMultiple;
+          multiple = measure === "real"
+            ? nominalEquityMultiple / inflationMultiple
+            : nominalEquityMultiple;
+        }
+
         return {
-          annual: (Math.pow(endValue / startValue, 1 / years) - 1) * 100,
-          total: (endValue / startValue - 1) * 100,
-          multiple: endValue / startValue,
+          annual: multiple < 0 ? null : (Math.pow(multiple, 1 / years) - 1) * 100,
+          total: (multiple - 1) * 100,
+          multiple,
           years,
         };
       }
 
       function colourFor(value) {
-        const palette = palettes[state.measure];
+        const palette = palettes[state.basis][state.measure];
+        if (value === null) return palette.colours[0];
         if (value < palette.limits[0]) return palette.colours[0];
         if (value < palette.limits[1]) return palette.colours[1];
         if (value < palette.limits[2]) return palette.colours[2];
@@ -342,7 +389,7 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
       }
 
       function renderLegend() {
-        const palette = palettes[state.measure];
+        const palette = palettes[state.basis][state.measure];
         const legend = document.querySelector("#legend");
         legend.replaceChildren(
           ...palette.labels.map((label, index) => {
@@ -352,7 +399,7 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
             swatch.className = "legend-swatch";
             swatch.style.background = palette.colours[index];
             const text = document.createElement("span");
-            text.textContent = index === 0 ? `${label} · lost ground` : label;
+            text.textContent = label;
             item.append(swatch, text);
             return item;
           }),
@@ -360,7 +407,9 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
       }
 
       function showTooltip(event, start, end, result) {
-        tooltip.innerHTML = `<strong>${formatPercent(result.annual)}</strong><span>${start.year} → ${end.year} · ${result.years} years</span>`;
+        const value = result.annual === null ? "Negative equity" : formatPercent(result.annual);
+        const basis = state.basis === "equity" ? "return on deposit" : "house-price growth";
+        tooltip.innerHTML = `<strong>${value}</strong><span>${start.year} → ${end.year} · ${result.years} years · ${basis}</span>`;
         tooltip.hidden = false;
         const bounds = chartScroll.getBoundingClientRect();
         const desiredLeft = event.clientX - bounds.left + chartScroll.scrollLeft + 14;
@@ -519,31 +568,41 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
 
         document.querySelector("#matrix-title").textContent = location.name;
         document.querySelector("#range-note").textContent =
-          `Every purchase and sale year, ${minYear}–${maxYear}`;
+          `Every purchase and sale year, ${minYear}–${maxYear}${state.basis === "equity" ? " · return on a 20% deposit" : ""}`;
         document.querySelector("#matrix-description").textContent =
-          `A triangular matrix for ${location.name}. Rows are purchase years, columns are sale years, and colour shows ${state.measure === "real" ? "inflation-adjusted" : "nominal"} annual house-price growth.`;
+          `A triangular matrix for ${location.name}. Rows are purchase years, columns are sale years, and colour shows ${state.measure === "real" ? "inflation-adjusted" : "nominal"} annual ${state.basis === "equity" ? "return on a 20% deposit" : "house-price growth"}.`;
+      }
+
+      function formatAnnualResult(result) {
+        return result.annual === null ? "Negative equity" : `${formatPercent(result.annual)} / yr`;
       }
 
       function renderDetail() {
         const map = pointMap();
         const start = map.get(state.selectedStart);
         const end = map.get(state.selectedEnd);
-        const active = periodReturn(start, end, state.measure);
-        const real = periodReturn(start, end, "real");
-        const nominal = periodReturn(start, end, "nominal");
+        const active = periodReturn(start, end, state.measure, state.basis);
+        const real = periodReturn(start, end, "real", state.basis);
+        const nominal = periodReturn(start, end, "nominal", state.basis);
         if (!active || !real || !nominal) return;
 
         document.querySelector("#detail-start").textContent = start.year;
         document.querySelector("#detail-end").textContent = end.year;
-        document.querySelector("#detail-return").textContent = formatPercent(active.annual);
+        document.querySelector("#detail-return").textContent =
+          active.annual === null ? "Negative equity" : formatPercent(active.annual);
         document.querySelector("#detail-label").textContent =
-          `${state.measure === "real" ? "real" : "nominal"} annual house-price growth over ${active.years} years`;
-        document.querySelector("#detail-real").textContent = `${formatPercent(real.annual)} / yr`;
-        document.querySelector("#detail-nominal").textContent = `${formatPercent(nominal.annual)} / yr`;
+          active.annual === null
+            ? `sale value is less than the unchanged mortgage after ${active.years} years`
+            : `${state.measure === "real" ? "real" : "nominal"} annual ${state.basis === "equity" ? "return on the starting deposit" : "house-price growth"} over ${active.years} years`;
+        document.querySelector("#detail-real").textContent = formatAnnualResult(real);
+        document.querySelector("#detail-nominal").textContent = formatAnnualResult(nominal);
         document.querySelector("#detail-total-label").textContent =
-          state.measure === "real" ? "Real total change" : "Nominal total change";
+          `${state.measure === "real" ? "Real" : "Nominal"} total ${state.basis === "equity" ? "equity return" : "change"}`;
         document.querySelector("#detail-total").textContent = formatPercent(active.total, 0);
         document.querySelector("#detail-multiple").textContent = `${active.multiple.toFixed(2)}×`;
+        document.querySelector("#detail-multiple-label").textContent =
+          state.basis === "equity" ? "Equity multiple" : "Price multiple";
+        document.querySelector("#assumption-note").hidden = state.basis !== "equity";
       }
 
       function renderStats() {
@@ -554,22 +613,25 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
           const result = periodReturn(start, end);
           if (result) returns.push({ start: year, end: year + state.horizon, value: result.annual });
         }
-        returns.sort((a, b) => a.value - b.value);
+        returns.sort((a, b) => (a.value ?? -Infinity) - (b.value ?? -Infinity));
         const median = returns.length
           ? returns.length % 2
             ? returns[Math.floor(returns.length / 2)].value
-            : (returns[returns.length / 2 - 1].value + returns[returns.length / 2].value) / 2
+            : returns[returns.length / 2 - 1].value === null || returns[returns.length / 2].value === null
+              ? null
+              : (returns[returns.length / 2 - 1].value + returns[returns.length / 2].value) / 2
           : null;
         const worst = returns[0];
         const best = returns.at(-1);
-        document.querySelector("#median-label").textContent = `Median ${state.horizon}-year growth`;
+        document.querySelector("#median-label").textContent =
+          `Median ${state.horizon}-year ${state.basis === "equity" ? "deposit return" : "growth"}`;
         document.querySelector("#best-label").textContent = `Best ${state.horizon} years`;
         document.querySelector("#worst-label").textContent = `Worst ${state.horizon} years`;
-        document.querySelector("#median-value").textContent = median === null ? "—" : `${formatPercent(median)} / yr`;
+        document.querySelector("#median-value").textContent = median === null ? "Negative equity" : `${formatPercent(median)} / yr`;
         document.querySelector("#median-period").textContent = `${returns.length} complete periods`;
-        document.querySelector("#best-value").textContent = best ? `${formatPercent(best.value)} / yr` : "—";
+        document.querySelector("#best-value").textContent = best ? (best.value === null ? "Negative equity" : `${formatPercent(best.value)} / yr`) : "—";
         document.querySelector("#best-period").textContent = best ? `${best.start}–${best.end}` : "—";
-        document.querySelector("#worst-value").textContent = worst ? `${formatPercent(worst.value)} / yr` : "—";
+        document.querySelector("#worst-value").textContent = worst ? (worst.value === null ? "Negative equity" : `${formatPercent(worst.value)} / yr`) : "—";
         document.querySelector("#worst-period").textContent = worst ? `${worst.start}–${worst.end}` : "—";
       }
 
@@ -587,6 +649,9 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
       function renderControls() {
         document.querySelectorAll("[data-measure]").forEach((button) => {
           button.setAttribute("aria-pressed", String(button.dataset.measure === state.measure));
+        });
+        document.querySelectorAll("[data-basis]").forEach((button) => {
+          button.setAttribute("aria-pressed", String(button.dataset.basis === state.basis));
         });
         document.querySelectorAll("[data-horizon]").forEach((button) => {
           button.setAttribute("aria-pressed", String(Number(button.dataset.horizon) === state.horizon));
@@ -628,6 +693,13 @@ const generatedDate = new Intl.DateTimeFormat("en-NZ", {
         const button = event.target.closest("[data-measure]");
         if (!button) return;
         state.measure = button.dataset.measure;
+        renderAll();
+      });
+
+      document.querySelector("#basis-control").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-basis]");
+        if (!button) return;
+        state.basis = button.dataset.basis;
         renderAll();
       });
 

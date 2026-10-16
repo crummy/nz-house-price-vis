@@ -175,7 +175,7 @@ h1 {
 
 .control-row {
   display: grid;
-  grid-template-columns: minmax(210px, 1.4fr) repeat(2, minmax(220px, 0.8fr)) auto;
+  grid-template-columns: minmax(210px, 1.3fr) repeat(3, minmax(190px, 0.8fr)) auto;
   gap: 18px;
   align-items: end;
   padding-bottom: 26px;
@@ -493,6 +493,20 @@ h1 {
   color: var(--muted);
   font-size: 0.67rem;
   line-height: 1.4;
+}
+
+.assumption-note {
+  margin: 20px 0 0;
+  padding: 12px;
+  border-left: 3px solid var(--accent-dark);
+  background: rgba(255, 255, 255, 0.36);
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.assumption-note[hidden] {
+  display: none;
 }
 
 .stat-strip {

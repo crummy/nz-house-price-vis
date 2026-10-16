@@ -3,6 +3,10 @@
 An Astro static site that shows the annualised house-price change for every
 purchase and sale year. The default view adjusts prices for inflation.
 
+The return-basis toggle can instead show the gross annualised return on a 20%
+deposit. This view assumes that the 80% mortgage principal stays unchanged. It
+does not include mortgage interest, repayments, or ownership costs.
+
 ## Local development
 
 ```sh
